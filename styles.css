@@ -940,3 +940,309 @@ tbody tr:hover { background:#f7fbff; }
   position: relative;
   z-index: 2;
 }
+
+
+/* ===== Dashboard giao diện trường học, theo mẫu tham chiếu ===== */
+:root{
+  --school-green:#10b981;
+  --school-green-dark:#059669;
+  --school-bg:#f6f8fb;
+  --school-line:#e8edf3;
+}
+.app-shell{background:var(--school-bg);}
+.sidebar{
+  width:220px;
+  background:#fff;
+  color:#475467;
+  border-right:1px solid var(--school-line);
+  padding:14px 12px;
+  gap:14px;
+  box-shadow:2px 0 12px rgba(16,24,40,.025);
+}
+.sidebar-header{padding:2px 6px 12px;border-bottom:1px solid #f0f2f5;}
+.sidebar-title{color:#101828;font-size:14px;}
+.sidebar-subtitle{color:#98a2b3;font-size:10px;}
+.brand-mark.small{width:34px;height:34px;border-radius:9px;background:#ecfdf5;color:var(--school-green-dark);font-size:18px;}
+.nav-item{color:#667085;padding:10px 11px;border-radius:8px;font-size:13px;gap:9px;}
+.nav-item:hover{background:#f0fdf8;color:#047857;}
+.nav-item.active{background:#ecfdf5;color:#047857;font-weight:750;}
+.nav-icon{width:20px;font-size:15px;}
+.user-chip{background:#f8fafc;border:1px solid #edf0f3;}
+.user-meta strong{color:#344054;}
+.user-meta span{color:#98a2b3;}
+.logout-btn{color:#667085;border-color:#e5e7eb;background:#fff;}
+.logout-btn:hover{background:#f8fafc;}
+.main-content{background:var(--school-bg);}
+.topbar{
+  background:#fff;
+  border-bottom:1px solid var(--school-line);
+  padding:12px 24px;
+  min-height:58px;
+  box-shadow:0 1px 4px rgba(16,24,40,.025);
+}
+.breadcrumb{font-size:11px;color:#98a2b3;}
+.topbar h2{font-size:16px;color:#101828;margin:2px 0 0;}
+.topbar-actions .pill{background:#ecfdf5;color:#047857;}
+.page-container{max-width:1500px;padding:20px 24px 36px;}
+.school-dashboard{max-width:1400px;margin:0 auto;}
+.school-dashboard-head{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:18px;}
+.school-eyebrow{font-size:10px;letter-spacing:.08em;font-weight:800;color:#98a2b3;margin-bottom:4px;}
+.school-dashboard-head h3{margin:0;color:#101828;font-size:21px;letter-spacing:-.02em;}
+.school-dashboard-head p{margin:5px 0 0;color:#667085;font-size:12px;}
+.school-head-actions{display:flex;align-items:flex-end;gap:9px;}
+.class-picker{min-width:155px;font-size:10px;color:#667085;font-weight:700;gap:5px;}
+.class-picker select{padding:8px 10px;border-radius:8px;font-size:12px;}
+.btn-school-primary{background:var(--school-green);color:#fff;border-radius:8px;padding:9px 13px;font-size:12px;box-shadow:0 2px 7px rgba(16,185,129,.18);}
+.btn-school-primary:hover{background:var(--school-green-dark);}
+.school-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:13px;}
+.school-kpi{min-height:100px;padding:16px;border:1px solid var(--school-line);border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(16,24,40,.025);}
+.school-kpi-clickable{width:100%;font:inherit;text-align:left;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;}
+.school-kpi-clickable:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(16,24,40,.08);border-color:#f3a6a6;}
+.team-speech-input{width:82px;min-width:82px;padding:7px 9px;border:1px solid var(--line,#d0d5dd);border-radius:8px;background:#fff;font-weight:700;text-align:center;}
+.school-kpi span{display:block;color:#667085;font-size:11px;font-weight:700;}
+.school-kpi strong{display:block;color:#101828;font-size:27px;line-height:1.15;margin:7px 0 3px;}
+.school-kpi small{display:block;color:#98a2b3;font-size:10px;}
+.kpi-symbol{width:35px;height:35px;border-radius:9px;display:grid;place-items:center;font-weight:900;font-size:17px;}
+.kpi-blue{background:linear-gradient(135deg,#fff,#f7fbff);}
+.kpi-blue .kpi-symbol{background:#eaf3ff;color:#3b82f6;}
+.kpi-purple{background:linear-gradient(135deg,#fff,#faf8ff);}
+.kpi-purple .kpi-symbol{background:#f0eaff;color:#8b5cf6;}
+.kpi-green{background:linear-gradient(135deg,#fff,#f5fffb);}
+.kpi-green .kpi-symbol{background:#e9fbf4;color:#10b981;}
+.kpi-red{background:linear-gradient(135deg,#fff,#fff8f8);}
+.kpi-red .kpi-symbol{background:#fff0f0;color:#ef4444;}
+.school-alert{display:flex;align-items:center;gap:10px;background:#fff5f5;border:1px solid #ffdede;border-radius:8px;color:#b42318;font-size:11px;padding:9px 12px;margin-bottom:14px;}
+.alert-icon{width:18px;height:18px;border-radius:50%;background:#ef4444;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:900;flex:0 0 auto;}
+.school-alert strong{font-weight:800;}
+.alert-close{margin-left:auto;border:0;background:transparent;color:#98a2b3;font-size:18px;line-height:1;}
+.school-main-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(360px,.95fr);gap:14px;}
+.school-bottom-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(360px,.95fr);gap:14px;margin-top:14px;}
+.school-panel{background:#fff;border:1px solid var(--school-line);border-radius:10px;box-shadow:0 2px 8px rgba(16,24,40,.025);overflow:hidden;}
+.school-panel-head{padding:13px 15px;border-bottom:1px solid #f0f2f5;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.school-panel-head h3{margin:0;font-size:13px;color:#101828;}
+.school-panel-head p{margin:3px 0 0;color:#98a2b3;font-size:10px;}
+.school-round-badge{background:#fff8e7;color:#b7791f;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;}
+.school-medal{font-size:18px;}
+.rank-list{padding:5px 15px 8px;}
+.rank-row{display:grid;grid-template-columns:25px minmax(110px,1fr) minmax(90px,1.2fr) 80px;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f3f4f6;}
+.rank-row:last-child{border-bottom:0;}
+.rank-no{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#f2f4f7;color:#667085;font-size:10px;font-weight:800;}
+.rank-row:first-child .rank-no{background:#fff1c7;color:#a16207;}
+.rank-info strong{display:block;color:#344054;font-size:11px;}
+.rank-info span{display:block;color:#98a2b3;font-size:9px;margin-top:2px;}
+.rank-bar{height:6px;background:#eef2f5;border-radius:999px;overflow:hidden;}
+.rank-bar i{display:block;height:100%;background:linear-gradient(90deg,#f59e0b,#10b981);border-radius:999px;}
+.rank-score{text-align:right;color:#344054;font-size:11px;}
+.top-students{padding:5px 10px 8px;}
+.top-student{width:100%;display:grid;grid-template-columns:22px 30px minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 5px;border:0;border-bottom:1px solid #f3f4f6;background:#fff;text-align:left;}
+.top-student:last-child{border-bottom:0;}
+.top-student:hover{background:#fbfcfd;}
+.student-rank{font-size:10px;color:#98a2b3;font-weight:800;text-align:center;}
+.student-avatar{width:30px;height:30px;border-radius:50%;background:#eaf3ff;color:#2563eb;display:grid;place-items:center;font-size:9px;font-weight:800;}
+.top-student:nth-child(1) .student-avatar{background:#fff4d6;color:#b7791f;}
+.student-name{min-width:0;}
+.student-name strong{display:block;font-size:11px;color:#344054;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.student-name small{display:block;font-size:9px;color:#98a2b3;margin-top:2px;}
+.student-score{font-size:12px;font-weight:850;color:#10a36f;}
+.student-score small{font-size:9px;color:#98a2b3;font-weight:500;}
+.school-bottom-grid .school-panel{min-height:180px;}
+.btn-school-light{background:#fff;border:1px solid #e5e7eb;color:#667085;border-radius:7px;padding:6px 9px;font-size:10px;}
+.school-activity{padding:4px 15px;}
+.school-activity-row{display:grid;grid-template-columns:25px 1fr auto;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #f3f4f6;}
+.school-activity-row:last-child{border-bottom:0;}
+.activity-badge{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;}
+.activity-badge.reward{background:#e9fbf4;color:#10b981;}
+.activity-badge.violation{background:#fff0f0;color:#ef4444;}
+.school-activity-row strong,.school-activity-row span{display:block;font-size:10px;}
+.school-activity-row strong{color:#344054;}
+.school-activity-row span{color:#98a2b3;margin-top:2px;}
+.school-activity-row>b{font-size:11px;color:#ef4444;}
+.summary-metrics{padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:9px;}
+.summary-metrics div{background:#f8fafc;border-radius:8px;padding:12px 9px;}
+.summary-metrics span{display:block;color:#667085;font-size:9px;}
+.summary-metrics strong{display:block;color:#101828;font-size:20px;margin-top:5px;}
+.school-empty{padding:25px 15px;color:#98a2b3;text-align:center;font-size:11px;}
+@media (max-width:1100px){
+  .school-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .school-main-grid,.school-bottom-grid{grid-template-columns:1fr;}
+}
+@media (max-width:760px){
+  .sidebar{width:240px;}
+  .page-container{padding:14px;}
+  .school-dashboard-head{align-items:stretch;flex-direction:column;}
+  .school-head-actions{align-items:stretch;}
+  .class-picker{flex:1;}
+  .school-kpis{grid-template-columns:1fr 1fr;}
+  .school-kpi{min-height:88px;padding:12px;}
+  .school-kpi strong{font-size:22px;}
+  .rank-row{grid-template-columns:24px 1fr 70px;}
+  .rank-bar{display:none;}
+}
+@media (max-width:480px){
+  .school-kpis{grid-template-columns:1fr;}
+  .school-head-actions{flex-direction:column;}
+}
+
+/* ===== Sống động hơn: lớp học thi đua ===== */
+.school-dashboard{position:relative;}
+.school-dashboard::before{content:"";position:absolute;inset:-30px -20px auto;height:220px;pointer-events:none;z-index:0;background:radial-gradient(circle at 15% 15%,rgba(59,130,246,.10),transparent 34%),radial-gradient(circle at 78% 8%,rgba(16,185,129,.10),transparent 30%),radial-gradient(circle at 55% 35%,rgba(245,158,11,.07),transparent 28%);filter:blur(1px);}
+.school-dashboard>*{position:relative;z-index:1;}
+.school-dashboard-head{padding:4px 0 4px;}
+.school-dashboard-head h3{animation:welcomeFloat .7s ease both;}
+.school-eyebrow{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:linear-gradient(90deg,#eff6ff,#ecfdf5);color:#16705a;box-shadow:0 3px 10px rgba(16,185,129,.08);}
+.school-eyebrow::before{content:"✨";font-size:11px;}
+.class-picker select{border:1px solid #dbe4ee;background:linear-gradient(180deg,#fff,#f8fafc);font-weight:750;box-shadow:0 3px 10px rgba(16,24,40,.04);transition:.2s ease;}
+.class-picker select:hover,.class-picker select:focus{border-color:#7dd3fc;box-shadow:0 0 0 3px rgba(59,130,246,.10);outline:none;}
+.btn-school-primary{position:relative;overflow:hidden;transition:transform .2s ease,box-shadow .2s ease;}
+.btn-school-primary::after{content:"";position:absolute;inset:-80% -20%;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.35) 50%,transparent 65%);transform:translateX(-70%);animation:shine 3.5s infinite;}
+.btn-school-primary:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(16,185,129,.22);}
+.school-kpi{position:relative;overflow:hidden;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;}
+.school-kpi::before{content:"";position:absolute;width:95px;height:95px;border-radius:50%;right:-28px;bottom:-48px;background:rgba(255,255,255,.72);}
+.school-kpi:hover{transform:translateY(-4px);box-shadow:0 12px 26px rgba(16,24,40,.08);border-color:#dbeafe;}
+.kpi-symbol{transition:transform .3s ease;}
+.school-kpi:hover .kpi-symbol{transform:rotate(-8deg) scale(1.1);}
+.school-alert{box-shadow:0 5px 18px rgba(239,68,68,.06);animation:softPulse 3.2s ease-in-out infinite;}
+.alert-icon{animation:alertBounce 1.8s ease-in-out infinite;}
+.school-panel{transition:transform .22s ease,box-shadow .22s ease;border-radius:14px;}
+.school-panel:hover{box-shadow:0 12px 28px rgba(16,24,40,.07);}
+.school-panel-head{background:linear-gradient(180deg,#fff,#fcfdfd);}
+.school-round-badge{box-shadow:0 4px 12px rgba(245,158,11,.12);animation:badgeBob 2.8s ease-in-out infinite;}
+.rank-row{transition:background .2s ease,transform .2s ease;padding-left:5px;padding-right:5px;border-radius:10px;}
+.rank-row:hover{background:linear-gradient(90deg,#fbfdff,#f6fffb);transform:translateX(3px);}
+.rank-row:first-child{background:linear-gradient(90deg,#fffaf0,#f6fff9);}
+.rank-row:first-child .rank-no{box-shadow:0 0 0 4px rgba(245,158,11,.08);}
+.rank-bar i{background:linear-gradient(90deg,#f59e0b 0%,#84cc16 48%,#10b981 100%);background-size:180% 100%;animation:barFlow 3s linear infinite;}
+.top-student{border-radius:10px;transition:transform .2s ease,background .2s ease,box-shadow .2s ease;margin:2px 0;}
+.top-student:hover{background:linear-gradient(90deg,#f8fbff,#f2fff9);transform:translateX(3px);box-shadow:0 5px 14px rgba(16,24,40,.05);}
+.top-student:nth-child(1){background:linear-gradient(90deg,#fffaf0,#fff);}
+.student-avatar{transition:transform .25s ease,box-shadow .25s ease;}
+.top-student:hover .student-avatar{transform:scale(1.12) rotate(4deg);box-shadow:0 5px 12px rgba(37,99,235,.14);}
+.student-score{position:relative;}
+.student-score::before{content:"✦";font-size:9px;margin-right:3px;color:#f59e0b;}
+.activity-badge{box-shadow:0 3px 8px rgba(16,24,40,.06);}
+.activity-badge.reward{animation:rewardPop 1.8s ease-in-out infinite;}
+.school-summary .summary-metrics div{transition:transform .2s ease,box-shadow .2s ease;background:linear-gradient(145deg,#f8fafc,#fff);}
+.school-summary .summary-metrics div:hover{transform:translateY(-3px);box-shadow:0 7px 16px rgba(16,24,40,.06);}
+.school-summary .summary-metrics div:first-child{border-left:3px solid #10b981;}
+.school-summary .summary-metrics div:nth-child(2){border-left:3px solid #f59e0b;}
+.school-summary .summary-metrics div:nth-child(3){border-left:3px solid #ef4444;}
+.team-speech-input{transition:.2s ease;box-shadow:0 2px 5px rgba(16,24,40,.03);}
+.team-speech-input:focus{outline:none;border-color:#34d399;box-shadow:0 0 0 3px rgba(16,185,129,.12);transform:scale(1.03);}
+
+/* Hiệu ứng nhỏ cho các trang quản lý */
+.card,.panel,.table-card{transition:transform .2s ease,box-shadow .2s ease;}
+.card:hover,.panel:hover,.table-card:hover{box-shadow:0 10px 24px rgba(16,24,40,.06);}
+.btn{transition:transform .16s ease,box-shadow .16s ease,background .16s ease;}
+.btn:not(:disabled):hover{transform:translateY(-1px);}
+.nav-item{transition:transform .18s ease,background .18s ease,box-shadow .18s ease;}
+.nav-item:hover{transform:translateX(2px);}
+.nav-item.active{box-shadow:0 7px 18px rgba(16,185,129,.12);}
+
+/* Confetti khi có thành tích */
+.celebration-layer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:99999;}
+.celebration-piece{position:absolute;top:-18px;width:9px;height:15px;border-radius:2px;opacity:.95;animation:confettiFall 1.35s cubic-bezier(.15,.75,.3,1) forwards;}
+
+@keyframes welcomeFloat{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes shine{0%,55%{transform:translateX(-80%)}75%,100%{transform:translateX(80%)}}
+@keyframes softPulse{0%,100%{box-shadow:0 5px 18px rgba(239,68,68,.05)}50%{box-shadow:0 8px 24px rgba(239,68,68,.11)}}
+@keyframes alertBounce{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes badgeBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes barFlow{0%{background-position:0 0}100%{background-position:180% 0}}
+@keyframes rewardPop{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes confettiFall{0%{transform:translate3d(0,0,0) rotate(0deg);opacity:1}100%{transform:translate3d(var(--dx),105vh,0) rotate(var(--rot));opacity:0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition:none!important}}
+
+/* ===== BẢN SẮC MÀU MỚI: rực rỡ, hiện đại, nhưng vẫn dễ đọc ===== */
+:root{
+  --school-bg:#f5f7ff;
+  --school-line:#e6eaf5;
+  --school-green:#10b981;
+  --school-green-dark:#059669;
+}
+body{
+  background:
+    radial-gradient(circle at 8% 0%,rgba(99,102,241,.10),transparent 24%),
+    radial-gradient(circle at 92% 12%,rgba(236,72,153,.09),transparent 22%),
+    radial-gradient(circle at 70% 90%,rgba(14,165,233,.08),transparent 26%),
+    #f6f8ff;
+}
+.sidebar{
+  background:
+    radial-gradient(circle at 15% 12%,rgba(59,130,246,.34),transparent 22%),
+    radial-gradient(circle at 90% 30%,rgba(168,85,247,.28),transparent 25%),
+    radial-gradient(circle at 25% 92%,rgba(20,184,166,.24),transparent 24%),
+    linear-gradient(180deg,#172554 0%,#312e81 48%,#164e63 100%);
+}
+.sidebar-header .brand-mark.small{background:linear-gradient(135deg,#dbeafe,#fce7f3);color:#4f46e5;box-shadow:0 8px 18px rgba(99,102,241,.22)}
+.nav-item{color:#e2e8f0;border-color:transparent}
+.nav-item:hover{background:linear-gradient(90deg,rgba(255,255,255,.13),rgba(255,255,255,.05));color:#fff;box-shadow:0 6px 16px rgba(15,23,42,.10)}
+.nav-item.active{background:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#ec4899);color:#fff;box-shadow:0 12px 25px rgba(99,102,241,.30)}
+.nav-item:nth-child(2) .nav-icon{color:#60a5fa}.nav-item:nth-child(3) .nav-icon{color:#f472b6}.nav-item:nth-child(4) .nav-icon{color:#a78bfa}.nav-item:nth-child(5) .nav-icon{color:#fbbf24}.nav-item:nth-child(6) .nav-icon{color:#34d399}.nav-item:nth-child(7) .nav-icon{color:#fb7185}
+.topbar{background:rgba(255,255,255,.86);box-shadow:0 5px 20px rgba(79,70,229,.05)}
+.page-container::before{height:6px;background:linear-gradient(90deg,#6366f1 0%,#8b5cf6 20%,#ec4899 40%,#f59e0b 62%,#10b981 82%,#06b6d4 100%);box-shadow:0 3px 12px rgba(99,102,241,.20)}
+.school-dashboard-head h3{background:linear-gradient(90deg,#312e81,#7c3aed 42%,#db2777);-webkit-background-clip:text;background-clip:text;color:transparent}
+.school-eyebrow{background:linear-gradient(90deg,#eef2ff,#fce7f3,#ecfeff);color:#6d28d9;border:1px solid #e9d5ff}
+.class-picker select{background:linear-gradient(135deg,#fff,#f5f3ff);border-color:#ddd6fe}
+.class-picker select:focus{border-color:#8b5cf6;box-shadow:0 0 0 4px rgba(139,92,246,.12)}
+.btn-school-primary{background:linear-gradient(135deg,#10b981,#06b6d4);box-shadow:0 8px 18px rgba(6,182,212,.20)}
+.btn-school-primary:hover{background:linear-gradient(135deg,#059669,#0891b2)}
+.school-kpi{border:1px solid rgba(255,255,255,.9);box-shadow:0 8px 22px rgba(79,70,229,.07)}
+.school-kpi:nth-child(1){background:linear-gradient(135deg,#ffffff 0%,#eff6ff 100%);border-top:4px solid #3b82f6}
+.school-kpi:nth-child(2){background:linear-gradient(135deg,#ffffff 0%,#f5f3ff 100%);border-top:4px solid #8b5cf6}
+.school-kpi:nth-child(3){background:linear-gradient(135deg,#ffffff 0%,#ecfdf5 100%);border-top:4px solid #10b981}
+.school-kpi:nth-child(4){background:linear-gradient(135deg,#ffffff 0%,#fff1f2 100%);border-top:4px solid #f43f5e}
+.kpi-blue .kpi-symbol{background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb}
+.kpi-purple .kpi-symbol{background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed}
+.kpi-green .kpi-symbol{background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669}
+.kpi-red .kpi-symbol{background:linear-gradient(135deg,#ffe4e6,#fecdd3);color:#e11d48}
+.school-alert{background:linear-gradient(90deg,#fff1f2,#fff7ed,#fffbeb)!important;border-color:#fecdd3!important}
+.school-main-grid .school-panel:first-child{border-top:4px solid #6366f1}
+.school-main-grid .school-panel:nth-child(2){border-top:4px solid #f59e0b}
+.school-bottom-grid .school-panel:first-child{border-top:4px solid #06b6d4}
+.school-bottom-grid .school-panel:nth-child(2){border-top:4px solid #10b981}
+.school-panel{box-shadow:0 10px 30px rgba(79,70,229,.07)}
+.school-panel-head{background:linear-gradient(90deg,#fff,#f8faff)}
+.school-panel:nth-child(odd) .school-panel-head h3{color:#3730a3}
+.school-round-badge{background:linear-gradient(135deg,#fff7ed,#fef3c7);color:#b45309;border:1px solid #fde68a}
+.rank-row:nth-child(1) .rank-no{background:linear-gradient(135deg,#fef3c7,#fbbf24);color:#92400e}
+.rank-row:nth-child(2) .rank-no{background:linear-gradient(135deg,#e0f2fe,#93c5fd);color:#1d4ed8}
+.rank-row:nth-child(3) .rank-no{background:linear-gradient(135deg,#ede9fe,#c4b5fd);color:#6d28d9}
+.rank-row:nth-child(n+4) .rank-no{background:#f1f5f9;color:#64748b}
+.rank-bar i{background:linear-gradient(90deg,#f97316,#facc15,#22c55e,#06b6d4,#8b5cf6);background-size:240% 100%}
+.top-student:nth-child(1){background:linear-gradient(90deg,#fff7ed,#fff)}
+.top-student:nth-child(2){background:linear-gradient(90deg,#eff6ff,#fff)}
+.top-student:nth-child(3){background:linear-gradient(90deg,#f5f3ff,#fff)}
+.top-student:nth-child(4){background:linear-gradient(90deg,#ecfeff,#fff)}
+.top-student:nth-child(5){background:linear-gradient(90deg,#f0fdf4,#fff)}
+.top-student:nth-child(1) .student-avatar{background:linear-gradient(135deg,#fef3c7,#fbbf24);color:#92400e}
+.top-student:nth-child(2) .student-avatar{background:linear-gradient(135deg,#dbeafe,#60a5fa);color:#1d4ed8}
+.top-student:nth-child(3) .student-avatar{background:linear-gradient(135deg,#ede9fe,#a78bfa);color:#6d28d9}
+.top-student:nth-child(4) .student-avatar{background:linear-gradient(135deg,#cffafe,#67e8f9);color:#0e7490}
+.top-student:nth-child(5) .student-avatar{background:linear-gradient(135deg,#dcfce7,#86efac);color:#15803d}
+.student-score{color:#059669}
+.activity-badge.reward{background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#047857}
+.activity-badge.violation{background:linear-gradient(135deg,#ffe4e6,#fecdd3);color:#e11d48}
+.school-summary .summary-metrics div{background:linear-gradient(145deg,#fff,#f8fafc)}
+.school-summary .summary-metrics div:first-child{border-left:4px solid #10b981;background:linear-gradient(145deg,#ecfdf5,#fff)}
+.school-summary .summary-metrics div:nth-child(2){border-left:4px solid #f59e0b;background:linear-gradient(145deg,#fffbeb,#fff)}
+.school-summary .summary-metrics div:nth-child(3){border-left:4px solid #f43f5e;background:linear-gradient(145deg,#fff1f2,#fff)}
+.team-speech-input{border-color:#c4b5fd;background:linear-gradient(180deg,#fff,#faf5ff)}
+.team-speech-input:focus{border-color:#8b5cf6;box-shadow:0 0 0 4px rgba(139,92,246,.12)}
+/* các nút thường cũng có màu theo ngữ nghĩa */
+.btn-primary{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
+.btn-primary:hover{background:linear-gradient(135deg,#4f46e5,#7c3aed)}
+.btn-success{background:linear-gradient(135deg,#10b981,#06b6d4)}
+.btn-warning{background:linear-gradient(135deg,#f59e0b,#f97316)}
+.btn-danger{background:linear-gradient(135deg,#f43f5e,#ef4444);color:#fff;border-color:transparent}
+.btn-secondary:hover{background:linear-gradient(135deg,#f8fafc,#eef2ff);border-color:#c4b5fd}
+/* các bảng quản lý cũng có màu nhấn */
+table thead th{background:linear-gradient(90deg,#eef2ff,#f5f3ff,#fdf2f8);color:#4338ca}
+tbody tr:nth-child(even){background:rgba(248,250,252,.65)}
+tbody tr:hover{background:linear-gradient(90deg,#eff6ff,#f5f3ff,#ecfdf5)!important}
+/* hiệu ứng nền chuyển động rất nhẹ */
+.school-dashboard::after{content:"";position:fixed;width:260px;height:260px;right:-90px;top:110px;border-radius:50%;background:radial-gradient(circle,rgba(236,72,153,.10),transparent 68%);pointer-events:none;z-index:0;animation:ambientFloat 8s ease-in-out infinite}
+@keyframes ambientFloat{0%,100%{transform:translate(0,0)}50%{transform:translate(-20px,18px)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+
+.score-bonus{display:inline-flex;align-items:center;justify-content:center;min-width:28px;padding:3px 7px;border-radius:999px;font-weight:800;color:#166534;background:#dcfce7;border:1px solid #86efac;margin-left:2px}.score-bonus::before{content:'+';margin-right:1px}

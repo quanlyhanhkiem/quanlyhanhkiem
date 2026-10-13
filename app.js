@@ -6,7 +6,7 @@
   const FIREBASE_ROOT_PATH = '/';
   let cloudReady = false;
   let databaseRef = null;
-  const VERSION = 4;
+  const VERSION = 5;
   const FIXED_MAX_SCORE = 10;
   const DEFAULT_RULES = [
     { id: 'v-late', type: 'violation', name: 'Đi học muộn', points: 1 },
@@ -24,6 +24,8 @@
     currentUser: null,
     currentPage: 'dashboard',
     dashboardClass: 'all',
+    dashboardWeek: 1,
+    teamWeek: 1,
     studentClass: 'all',
     studentSearch: '',
     historySearch: '',
@@ -42,7 +44,11 @@
   function clampScore(value) {
     const num = Number(value);
     if (!Number.isFinite(num)) return 0;
-    return Math.min(FIXED_MAX_SCORE, Math.max(0, Math.round(num * 100) / 100));
+    const settings = state.data && state.data.settings ? state.data.settings : {};
+    const min = Number.isFinite(Number(settings.minScore)) ? Number(settings.minScore) : 0;
+    // Điểm cộng có thể vượt mốc 10 (ví dụ 10 + 1 = 11); điểm trừ vẫn không xuống dưới điểm tối thiểu.
+    const max = Math.max(100, Number.isFinite(Number(settings.maxScore)) ? Number(settings.maxScore) : FIXED_MAX_SCORE);
+    return Math.min(max, Math.max(min, Math.round(num * 100) / 100));
   }
 
   function normalizeData(raw) {
@@ -59,14 +65,19 @@
       rules: Array.isArray(d.rules) ? d.rules : base.rules,
       teacherRules: Array.isArray(d.teacherRules) ? d.teacherRules : base.teacherRules,
       history: Array.isArray(d.history) ? d.history : [],
+      teams: Array.isArray(d.teams) ? d.teams : [],
+      classes: Array.isArray(d.classes) ? d.classes : [],
       settings: { ...base.settings, ...(d.settings || {}) }
     };
-    out.settings.maxScore = FIXED_MAX_SCORE;
+    out.settings.minScore = Math.max(0, Math.min(9, Number(out.settings.minScore ?? 0) || 0));
+    out.settings.maxScore = Math.max(out.settings.minScore + 1, Math.min(10, Number(out.settings.maxScore ?? FIXED_MAX_SCORE) || FIXED_MAX_SCORE));
+    out.settings.logActivity = out.settings.logActivity !== false;
     out.students = out.students.map(s => ({
       id: String(s.id || uid('stu')),
       name: String(s.name || '').trim(),
       className: String(s.className || '').trim(),
-      score: clampScore(s.score ?? FIXED_MAX_SCORE)
+      score: clampScore(s.score ?? FIXED_MAX_SCORE),
+      teamId: String(s.teamId || '')
     })).filter(s => s.name && s.className);
     out.teachers = out.teachers.map(t => ({
       id: String(t.id || uid('tea')),
@@ -98,7 +109,7 @@
       className: String(h.className || ''),
       teacherId: String(h.teacherId || ''),
       teacherName: String(h.teacherName || ''),
-      type: ['reward','violation','deletion'].includes(h.type) ? h.type : 'violation',
+      type: ['reward','violation','deletion','team-action','team-violation','team-participation'].includes(h.type) ? h.type : 'violation',
       actionType: ['reward','violation'].includes(h.actionType) ? h.actionType : '',
       ruleName: String(h.ruleName || ''),
       points: Math.max(0, Number(h.points) || 0),
@@ -106,7 +117,10 @@
       newScore: clampScore(h.newScore),
       note: String(h.note || ''),
       deletedHistoryId: String(h.deletedHistoryId || ''),
-      time: Number.isFinite(Number(h.time)) ? Number(h.time) : Date.now()
+      time: Number.isFinite(Number(h.time)) ? Number(h.time) : Date.now(),
+      teamId: String(h.teamId || ''),
+      teamName: String(h.teamName || ''),
+      weekNumber: Math.min(35, Math.max(1, Number(h.weekNumber) || 1))
     }));
     out.settings.siteName = String(out.settings.siteName || base.settings.siteName).trim() || base.settings.siteName;
     return out;
@@ -121,7 +135,9 @@
       rules: clone(DEFAULT_RULES),
       teacherRules: [],
       history: [],
-      settings: { siteName: 'Quản lý điểm hạnh kiểm', maxScore: FIXED_MAX_SCORE }
+      teams: [],
+      classes: [],
+      settings: { siteName: 'Quản lý điểm hạnh kiểm', minScore: 0, maxScore: FIXED_MAX_SCORE, logActivity: true }
     };
   }
 
@@ -177,6 +193,7 @@
       if (!remote || typeof remote !== 'object') return;
 
       const normalized = normalizeData(remote);
+      normalized.students.forEach(s => { s.score = clampScore(s.score); });
       const changed = JSON.stringify(normalized) !== JSON.stringify(state.data);
       cloudReady = true;
       getStorage().setItem(STORAGE_KEY, JSON.stringify(normalized));
@@ -216,7 +233,7 @@
   async function saveData() {
     try {
       state.data.version = VERSION;
-      state.data.settings.maxScore = FIXED_MAX_SCORE;
+      state.data.settings.maxScore = Math.max(Number(state.data.settings.minScore || 0) + 1, Math.min(10, Number(state.data.settings.maxScore || FIXED_MAX_SCORE)));
       state.data.students.forEach(s => { s.score = clampScore(s.score); });
       const serialized = JSON.stringify(state.data);
       getStorage().setItem(STORAGE_KEY, serialized);
@@ -257,7 +274,32 @@
   function scoreHtml(score) {
     const s = clampScore(score);
     const critical = s <= 2 ? ' score-critical' : '';
-    return `<span class="score ${scoreClass(s)}${critical}">${s}</span><span class="muted"> / 10</span>`;
+    const max = state.data?.settings?.maxScore ?? 10;
+    if (s > max) {
+      const extra = (s - max).toFixed(2).replace(/\.00$/, '');
+      return `<span class="score ${scoreClass(max)}${critical}">${max}</span><span class="muted"> + </span><span class="score-bonus" title="Điểm cộng thêm">${extra}</span>`;
+    }
+    return `<span class="score ${scoreClass(s)}${critical}">${s}</span><span class="muted"> / ${max}</span>`;
+  }
+
+  function celebrate(kind = 'success') {
+    const layer = document.createElement('div');
+    layer.className = 'celebration-layer';
+    const count = kind === 'team' ? 34 : 22;
+    for (let i = 0; i < count; i++) {
+      const piece = document.createElement('i');
+      piece.className = 'celebration-piece';
+      piece.style.left = `${Math.random() * 100}%`;
+      piece.style.setProperty('--dx', `${(Math.random() - .5) * 260}px`);
+      piece.style.setProperty('--rot', `${(Math.random() - .5) * 900}deg`);
+      piece.style.animationDelay = `${Math.random() * .18}s`;
+      piece.style.width = `${6 + Math.random() * 6}px`;
+      piece.style.height = `${10 + Math.random() * 10}px`;
+      piece.style.background = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444'][Math.floor(Math.random()*5)];
+      layer.appendChild(piece);
+    }
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 1700);
   }
 
   function showToast(message, type = 'success') {
@@ -340,20 +382,20 @@
     $('#userDisplayRole').textContent = isAdmin() ? 'Quản trị viên' : 'Giáo viên';
     if (isAdmin()) setAvatarElement($('#userAvatar'), '', 'A');
     else setAvatarElement($('#userAvatar'), currentTeacher()?.avatar || '', initials(currentTeacher()?.name));
-    $('#maxScorePill').textContent = 'Tối đa 10 điểm';
+    $('#maxScorePill').textContent = `Điểm ${state.data.settings.minScore ?? 0}–${state.data.settings.maxScore ?? 10}`;
     $$('.admin-only').forEach(el => { el.style.display = isAdmin() ? '' : 'none'; });
     $$('.teacher-only').forEach(el => { el.style.display = isAdmin() ? 'none' : ''; });
     navigate(state.currentPage || 'dashboard', false);
   }
 
   function navigate(page, updateHistory = true) {
-    const allowed = ['dashboard','students','teachers','rules','my-violations','my-rewards','teacher-account','history','settings'];
+    const allowed = ['dashboard','students','teachers','rules','my-violations','my-rewards','teacher-account','history','settings','teams'];
     if (!allowed.includes(page) || (!isAdmin() && ['teachers','rules','settings'].includes(page)) || (isAdmin() && ['my-violations','my-rewards','teacher-account'].includes(page))) page = 'dashboard';
     state.currentPage = page;
     if (updateHistory) state.mobileMenuOpen = false;
     $$('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
     $$('.page').forEach(el => el.classList.toggle('active', el.id === `page-${page}`));
-    const titles = { dashboard: 'Tổng quan', students: 'Học sinh', teachers: 'Giáo viên', rules: 'Quy định điểm', 'my-violations': 'Vi phạm lớp tôi', 'my-rewards': 'Khen thưởng lớp tôi', 'teacher-account': 'Tài khoản', history: 'Lịch sử', settings: 'Cài đặt' };
+    const titles = { dashboard: 'Tổng quan', students: 'Học sinh', teachers: 'Giáo viên', rules: 'Quy định điểm', 'my-violations': 'Vi phạm lớp tôi', 'my-rewards': 'Khen thưởng lớp tôi', 'teacher-account': 'Tài khoản', history: 'Lịch sử', settings: 'Cài đặt', teams: 'Quản lý tổ & xếp hạng' };
     $('#pageTitle').textContent = titles[page];
     $('#pageHeading').textContent = titles[page];
     document.body.classList.remove('mobile-menu-open');
@@ -366,68 +408,163 @@
     if (page === 'teacher-account') renderTeacherAccount();
     if (page === 'history') renderHistory();
     if (page === 'settings') renderSettings();
+    if (page === 'teams' && window.HanhKiemTeams) window.HanhKiemTeams.render();
   }
 
   function renderDashboard() {
     const allStudents = accessibleStudents();
     const cls = state.dashboardClass;
+    const selectedWeek = Math.min(35, Math.max(1, Number(state.dashboardWeek) || 1));
     const students = cls === 'all' ? allStudents : allStudents.filter(s => s.className === cls);
     const histories = state.data.history.filter(h => {
       const stu = state.data.students.find(s => s.id === h.studentId);
-      return !!stu && canAccessStudent(stu) && (cls === 'all' || stu.className === cls);
+      return !!stu && canAccessStudent(stu) && (cls === 'all' || stu.className === cls) && Number(h.weekNumber || 1) === selectedWeek;
     });
-    const violations = histories.filter(h => h.type === 'violation').length;
-    const rewards = histories.filter(h => h.type === 'reward').length;
-    const avg = students.length ? (students.reduce((sum, s) => sum + clampScore(s.score), 0) / students.length) : 0;
-    const recent = histories.slice().sort((a,b) => b.time - a.time).slice(0, 8);
+    const violations = histories.filter(h => h.type === 'violation');
+    const rewards = histories.filter(h => h.type === 'reward');
+    const avg = students.length ? students.reduce((sum, s) => sum + clampScore(s.score), 0) / students.length : 0;
     const classes = effectiveClassOptions();
+    const classStudents = students.length;
+    const maxScore = state.data?.settings?.maxScore ?? 10;
+    const topStudents = students.slice().sort((a,b) => clampScore(b.score) - clampScore(a.score)).slice(0,5);
+    const recent = histories.slice().sort((a,b) => b.time - a.time).slice(0, 5);
+
+    // Xếp hạng tổ theo tuần: 100 điểm gốc + điểm cộng/trừ + điểm phát biểu.
+    const teams = [];
+    const teamList = window.HanhKiemTeams?.getTeamsForClass?.(cls) || state.data.teams || [];
+    teamList.forEach((team, index) => {
+      const members = state.data.students.filter(s => (team.studentIds || []).includes(s.id) && (cls === 'all' || s.className === cls));
+      const score = window.HanhKiemTeams?.teamScore ? window.HanhKiemTeams.teamScore(team, selectedWeek) : 100;
+      teams.push({ name: team.name || `Tổ ${index + 1}`, score, count: members.length });
+    });
+    teams.sort((a,b) => b.score - a.score);
+
+    const lowStudents = students.filter(s => clampScore(s.score) < 5);
+    const alertText = lowStudents.length
+      ? `Có ${lowStudents.length} học sinh cần được theo dõi điểm hạnh kiểm.`
+      : (violations.length ? `Có ${violations.length} lượt vi phạm được ghi nhận trong phạm vi đang xem.` : 'Chưa có vấn đề cần xử lý.');
 
     $('#page-dashboard').innerHTML = `
-      <div class="dashboard-hero">
-        <div class="dashboard-hero-main">
-          <div class="dashboard-hero-kicker">${isAdmin() ? '✨ Khu vực quản trị' : '🌱 Khu vực giáo viên'}</div>
-          <h3>Xin chào, ${escapeHtml(isAdmin() ? 'Quản trị viên' : (currentTeacher()?.name || 'giáo viên'))}!</h3>
-          <p>Hôm nay bạn có thể theo dõi nhanh tình hình hạnh kiểm, cập nhật vi phạm và ghi nhận khen thưởng cho học sinh.</p>
-          <div class="dashboard-hero-tags"><span>📚 Quản lý học sinh</span><span>⭐ Điểm hiện tại</span><span>📈 Thống kê trực quan</span></div>
-        </div>
-        <div class="dashboard-hero-score"><span>Thang điểm</span><strong>10</strong><small>điểm tối đa</small></div>
-      </div>
-      <div class="toolbar" style="margin-bottom:18px;">
-        <div>
-          <div class="muted">Xin chào, ${escapeHtml(isAdmin() ? 'Quản trị viên' : (currentTeacher()?.name || 'giáo viên'))}</div>
-          <h3 style="margin:4px 0 0;font-size:22px;">Tình hình hạnh kiểm hiện tại</h3>
-        </div>
-        <div class="toolbar-right">
-          <label style="min-width:180px;">Lọc theo lớp
-            <select id="dashboardClassFilter"><option value="all">Tất cả lớp</option>${classes.map(c => `<option value="${escapeHtml(c)}" ${state.dashboardClass===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}</select>
-          </label>
-          <button class="btn btn-primary" data-action="export-excel">📊 Xuất Excel</button>
-        </div>
-      </div>
-
-      <div class="grid grid-4" style="margin-bottom:18px;">
-        <div class="card stat-card"><div class="stat-top"><div><div class="stat-label">Tổng số học sinh</div><div class="stat-value">${students.length}</div><div class="stat-note">Trong phạm vi đang xem</div></div><div class="stat-icon">👥</div></div></div>
-        <div class="card stat-card"><div class="stat-top"><div><div class="stat-label">Điểm trung bình</div><div class="stat-value">${avg.toFixed(2)}</div><div class="stat-note">Trên thang điểm 10</div></div><div class="stat-icon">⭐</div></div></div>
-        <div class="card stat-card"><div class="stat-top"><div><div class="stat-label">Lượt vi phạm</div><div class="stat-value">${violations}</div><div class="stat-note">Theo lịch sử đã ghi</div></div><div class="stat-icon">⚠️</div></div></div>
-        <div class="card stat-card"><div class="stat-top"><div><div class="stat-label">Lượt khen thưởng</div><div class="stat-value">${rewards}</div><div class="stat-note">Theo lịch sử đã ghi</div></div><div class="stat-icon">🏆</div></div></div>
-      </div>
-
-      <div class="grid grid-2">
-        <div class="card">
-          <div class="card-header"><div><h3 class="card-title">Danh sách học sinh</h3><div class="card-subtitle">Điểm hiện tại theo lớp đang chọn</div></div><button class="btn btn-secondary" data-action="go-students">Xem tất cả</button></div>
-          <div class="table-wrap">
-            ${students.length ? `<table><thead><tr><th>STT</th><th>Họ và tên</th><th>Lớp</th><th>Điểm</th></tr></thead><tbody>${students.slice(0,10).map((s,i)=>`<tr><td>${i+1}</td><td><button class="link-btn" data-action="student-detail" data-id="${escapeHtml(s.id)}">${escapeHtml(s.name)}</button></td><td>${escapeHtml(s.className)}</td><td>${scoreHtml(s.score)}</td></tr>`).join('')}</tbody></table>` : `<div class="empty"><strong>Chưa có học sinh</strong>Hãy thêm học sinh để bắt đầu.</div>`}
+      <div class="school-dashboard">
+        <div class="school-dashboard-head">
+          <div>
+            <div class="school-eyebrow">TỔNG QUAN LỚP HỌC</div>
+            <h3>Xin chào, ${escapeHtml(isAdmin() ? 'Quản trị viên' : (currentTeacher()?.name || 'Giáo viên'))}!</h3>
+            <p>Theo dõi nhanh sĩ số, điểm hạnh kiểm và tình hình thi đua của lớp.</p>
+          </div>
+          <div class="school-head-actions">
+            <label class="class-picker">Lớp đang xem
+              <select id="dashboardClassFilter">
+                <option value="all" ${cls === 'all' ? 'selected' : ''}>Tất cả lớp</option>
+                ${classes.map(c => `<option value="${escapeHtml(c)}" ${cls === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="class-picker">Tuần
+              <select id="dashboardWeekFilter">
+                ${Array.from({length:35}, (_,i) => i+1).map(w => `<option value="${w}" ${Number(state.dashboardWeek) === w ? 'selected' : ''}>Tuần ${w}</option>`).join('')}
+              </select>
+            </label>
+            <button class="btn btn-school-primary" data-action="export-excel">Xuất báo cáo</button>
           </div>
         </div>
-        <div class="card">
-          <div class="card-header"><div><h3 class="card-title">Hoạt động gần đây</h3><div class="card-subtitle">Các thao tác mới nhất trong phạm vi đang xem</div></div><button class="btn btn-secondary" data-action="go-history">Xem lịch sử</button></div>
-          <div class="card-body">
-            ${recent.length ? `<div class="activity-list">${recent.map(h => `<div class="activity-item"><div class="activity-dot ${h.type==='reward'?'dot-reward':h.type==='violation'?'dot-violation':'dot-neutral'}"></div><div class="activity-main"><div class="activity-title"><strong>${escapeHtml(h.studentName)}</strong> — ${h.type==='deletion' ? `Đã xóa lịch sử “${escapeHtml(h.ruleName)}” <span class="pill pill-neutral">Nhật ký</span>` : `${escapeHtml(h.ruleName)} ${h.type==='reward'?`<span class="pill pill-success">+${h.points}</span>`:`<span class="pill pill-danger">-${h.points}</span>`}`}</div><div class="activity-meta">${formatDate(h.time)} · ${escapeHtml(h.teacherName || 'Hệ thống')} · ${escapeHtml(h.className)}</div></div></div>`).join('')}</div>` : `<div class="empty"><strong>Chưa có hoạt động</strong>Vi phạm/khen thưởng và thao tác xóa sẽ xuất hiện tại đây.</div>`}
+
+        <div class="school-kpis">
+          <div class="school-kpi kpi-blue">
+            <div><span>Tổng học sinh</span><strong>${classStudents}</strong><small>Học sinh trong lớp</small></div>
+            <div class="kpi-symbol">👥</div>
+          </div>
+          <div class="school-kpi kpi-purple">
+            <div><span>Sĩ số đã đủ</span><strong>${classStudents}</strong><small>100% sĩ số hiện tại</small></div>
+            <div class="kpi-symbol">✓</div>
+          </div>
+          <div class="school-kpi kpi-green">
+            <div><span>Điểm TB lớp</span><strong>${avg.toFixed(2)}</strong><small>Trên thang ${maxScore}</small></div>
+            <div class="kpi-symbol">★</div>
+          </div>
+          <button class="school-kpi kpi-red school-kpi-clickable" data-action="show-week-violations" type="button">
+            <div><span>Vi phạm cần xử lý</span><strong>${violations.length}</strong><small>Tuần ${selectedWeek} · ${new Set(violations.map(h => h.studentId)).size} học sinh</small></div>
+            <div class="kpi-symbol">!</div>
+          </button>
+        </div>
+
+        <div class="school-kpis" style="margin-top:14px">
+          <div class="school-kpi kpi-orange">
+            <div><span>Điểm trung bình các tổ</span><strong>${teams.length ? (teams.reduce((sum,t)=>sum+t.score,0)/teams.length).toFixed(2) : '0.00'}</strong><small>Tuần ${selectedWeek}</small></div>
+            <div class="kpi-symbol">📊</div>
+          </div>
+          <div class="school-kpi kpi-green">
+            <div><span>Tổ hạng nhất</span><strong>${teams.length ? escapeHtml(teams[0].name) : '—'}</strong><small>${teams.length ? teams[0].score.toFixed(2)+' điểm' : 'Chưa có dữ liệu'}</small></div>
+            <div class="kpi-symbol">🏆</div>
+          </div>
+        </div>
+
+        <div class="school-alert">
+          <div class="alert-icon">!</div>
+          <div><strong>Thông báo:</strong> ${escapeHtml(alertText)}</div>
+          <button class="alert-close" aria-label="Đóng">×</button>
+        </div>
+
+        <div class="school-main-grid">
+          <div class="school-panel">
+            <div class="school-panel-head">
+              <div><h3>Xếp hạng thi đua các tổ</h3><p>Thứ hạng tự động theo điểm cộng/trừ của Tuần ${Number(state.dashboardWeek)||1}</p></div>
+              <span class="school-round-badge">Tuần ${Number(state.dashboardWeek) || 1}</span>
+            </div>
+            <div class="rank-list">
+              ${teams.length ? teams.slice(0,6).map((t,i) => `
+                <div class="rank-row">
+                  <div class="rank-no">${i+1}</div>
+                  <div class="rank-info"><strong>${escapeHtml(t.name)}</strong><span>${t.count} thành viên</span></div>
+                  <div class="rank-bar"><i style="width:${Math.max(8, Math.min(100, t.score))}%"></i></div>
+                  <strong class="rank-score">${t.score.toFixed(2)} / 100</strong>
+                </div>`).join('') : `<div class="school-empty">Chưa có dữ liệu tổ. Hãy thêm học sinh và phân tổ.</div>`}
+            </div>
+          </div>
+
+          <div class="school-panel">
+            <div class="school-panel-head">
+              <div><h3>Top 5 học sinh có điểm cao nhất</h3><p>Danh sách nổi bật trong phạm vi đang xem</p></div>
+              <span class="school-medal">🏆</span>
+            </div>
+            <div class="top-students">
+              ${topStudents.length ? topStudents.map((s,i) => `
+                <button class="top-student" data-action="student-detail" data-id="${escapeHtml(s.id)}">
+                  <span class="student-rank">${i+1}</span>
+                  <span class="student-avatar">${escapeHtml(initials(s.name))}</span>
+                  <span class="student-name"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(s.className)}</small></span>
+                  <span class="student-score">${clampScore(s.score).toFixed(2)} <small>/ ${maxScore}</small></span>
+                </button>`).join('') : `<div class="school-empty">Chưa có học sinh.</div>`}
+            </div>
+          </div>
+        </div>
+
+        <div class="school-bottom-grid">
+          <div class="school-panel">
+            <div class="school-panel-head"><div><h3>Hoạt động gần đây</h3><p>Những cập nhật mới nhất</p></div><button class="btn btn-school-light" data-action="go-history">Xem tất cả</button></div>
+            ${recent.length ? `<div class="school-activity">${recent.map(h => `
+              <div class="school-activity-row">
+                <span class="activity-badge ${h.type === 'reward' ? 'reward' : 'violation'}">${h.type === 'reward' ? '+' : '−'}</span>
+                <div><strong>${escapeHtml(h.studentName)}</strong><span>${escapeHtml(h.ruleName)} · ${formatDate(h.time)}</span></div>
+                <b>${h.type === 'reward' ? '+' : '−'}${h.points}</b>
+              </div>`).join('')}</div>` : `<div class="school-empty">Chưa có hoạt động gần đây.</div>`}
+          </div>
+          <div class="school-panel school-summary">
+            <div class="school-panel-head"><div><h3>Tình hình hạnh kiểm</h3><p>Phân bố điểm của học sinh</p></div></div>
+            <div class="summary-metrics">
+              <div><span>Tốt (≥ 8)</span><strong>${students.filter(s => clampScore(s.score) >= 8).length}</strong></div>
+              <div><span>Khá (5–7.99)</span><strong>${students.filter(s => clampScore(s.score) >= 5 && clampScore(s.score) < 8).length}</strong></div>
+              <div><span>Cần chú ý (&lt; 5)</span><strong>${lowStudents.length}</strong></div>
+            </div>
           </div>
         </div>
       </div>`;
 
-    $('#dashboardClassFilter').addEventListener('change', e => { state.dashboardClass = e.target.value; renderDashboard(); });
+    const filter = $('#dashboardClassFilter');
+    if (filter) filter.addEventListener('change', e => { state.dashboardClass = e.target.value; renderDashboard(); });
+    const weekFilter = $('#dashboardWeekFilter');
+    if (weekFilter) weekFilter.addEventListener('change', e => { state.dashboardWeek = Math.min(35, Math.max(1, Number(e.target.value) || 1)); renderDashboard(); });
+    const close = $('.alert-close');
+    if (close) close.addEventListener('click', e => e.currentTarget.closest('.school-alert')?.remove());
   }
 
   function renderStudents() {
@@ -438,10 +575,12 @@
       return matchQ && matchClass;
     });
     const classes = effectiveClassOptions();
+    const studentTeamName = s => window.HanhKiemTeams?.teamForStudent(s)?.name || 'Chưa xếp tổ';
     const adminTools = isAdmin() ? `
       <button class="btn btn-primary" data-action="add-student">+ Thêm học sinh</button>
       <button class="btn btn-secondary" data-action="import-students">📥 Nhập Excel/CSV</button>
-      <button class="btn btn-secondary" data-action="download-template">⬇️ Tải Excel mẫu</button>` : '';
+      <button class="btn btn-secondary" data-action="download-template">⬇️ Tải Excel mẫu</button>
+      <button class="btn btn-danger" data-action="bulk-student-deduct">− Trừ nhiều học sinh</button>` : `<button class="btn btn-danger" data-action="bulk-student-deduct">− Trừ nhiều học sinh</button>`;
 
     $('#page-students').innerHTML = `
       <div class="toolbar" style="margin-bottom:16px;">
@@ -455,10 +594,11 @@
       <div class="card">
         <div class="card-header"><div><h3 class="card-title">Danh sách học sinh</h3><div class="card-subtitle">${students.length} học sinh phù hợp · giữ nguyên thứ tự nhập</div></div></div>
         <div class="table-wrap">
-          ${students.length ? `<table><thead><tr><th>STT</th><th>Họ và tên</th><th>Lớp</th><th>Điểm hiện tại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${students.map((s,i)=>`
+          ${students.length ? `<table><thead><tr><th>STT</th><th>Họ và tên</th><th>Tổ</th><th>Lớp</th><th>Điểm hiện tại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>${students.map((s,i)=>`
             <tr>
               <td>${i+1}</td>
               <td><button class="link-btn" data-action="student-detail" data-id="${escapeHtml(s.id)}">${escapeHtml(s.name)}</button></td>
+              <td>${escapeHtml(studentTeamName(s))}</td>
               <td>${escapeHtml(s.className)}</td>
               <td>${scoreHtml(s.score)}</td>
               <td>${statusPill(s.score)}</td>
@@ -673,7 +813,7 @@
       const h = item.h;
       h.oldScore = clampScore(score);
       const delta = h.type === 'reward' ? Number(h.points) : -Number(h.points);
-      score = clampScore(score + (Number.isFinite(delta) ? delta : 0));
+      score = Math.max(Number(state.data.settings.minScore || 0), Math.round((score + (Number.isFinite(delta) ? delta : 0)) * 100) / 100);
       h.newScore = score;
     }
     const student = state.data.students.find(s => s.id === studentId);
@@ -686,35 +826,14 @@
     if (!entry || !isScoreHistory(entry)) return showToast('Bản ghi không tồn tại hoặc đã được xóa.', 'warning');
     const student = state.data.students.find(s => s.id === entry.studentId);
     if (!student || !canAccessStudent(student)) return showToast('Bạn không có quyền xóa lịch sử này.', 'error');
-    const actor = isAdmin() ? { id: 'admin', name: 'Admin' } : currentTeacher();
-    const actorName = actor?.name || 'Người dùng';
-    const scoreBeforeDelete = clampScore(student.score);
     const kind = entry.type === 'reward' ? 'khen thưởng' : 'vi phạm';
-    const message = `Xóa ${kind} “${entry.ruleName}” của ${entry.studentName}?\n${formatDate(entry.time)} · ${entry.oldScore} → ${entry.newScore}\n\nSau khi xóa, điểm hiện tại và các mốc điểm lịch sử sau đó sẽ được tính lại. Hệ thống vẫn lưu lại nhật ký việc xóa.`;
+    const message = `Xóa ${kind} “${entry.ruleName}” của ${entry.studentName}?\n${formatDate(entry.time)} · ${entry.oldScore} → ${entry.newScore}\n\nSau khi xóa, điểm hiện tại và các mốc điểm lịch sử sau đó sẽ được tính lại. Bản ghi này sẽ bị xóa hoàn toàn, không tạo nhật ký xóa.`;
     if (!confirmAction(message)) return;
 
     state.data.history = state.data.history.filter(h => h.id !== historyId);
     recalibrateStudentHistory(entry.studentId);
-    const scoreAfterDelete = clampScore(student.score);
-    state.data.history.push({
-      id: uid('hisdel'),
-      studentId: entry.studentId,
-      studentName: entry.studentName,
-      className: entry.className,
-      teacherId: actor?.id || 'admin',
-      teacherName: actorName,
-      type: 'deletion',
-      actionType: entry.type,
-      ruleName: entry.ruleName,
-      points: entry.points,
-      oldScore: scoreBeforeDelete,
-      newScore: scoreAfterDelete,
-      note: `Đã xóa bản ghi ${kind} do ${entry.teacherName || 'Hệ thống'} thực hiện lúc ${formatDate(entry.time)}. Điểm sau khi tính lại: ${scoreBeforeDelete} → ${scoreAfterDelete}. Bản ghi gốc: ${entry.id}.`,
-      deletedHistoryId: entry.id,
-      time: Date.now()
-    });
     saveData();
-    showToast(`Đã xóa ${kind} và lưu nhật ký thao tác của ${actorName}.`);
+    showToast(`Đã xóa ${kind}; không lưu thêm nhật ký xóa.`);
     renderCurrentPage();
   }
 
@@ -747,7 +866,7 @@
     const s = state.data.settings;
     $('#page-settings').innerHTML = `
       <div class="grid grid-2">
-        <div class="card"><div class="card-header"><div><h3 class="card-title">Thông tin website</h3><div class="card-subtitle">Cấu hình hiển thị cơ bản</div></div></div><div class="card-body"><form id="siteSettingsForm" class="stack-form" style="margin-top:0;"><label>Tên website<input name="siteName" value="${escapeHtml(s.siteName)}" required></label><label>Điểm khởi đầu<input value="10" disabled></label><label>Điểm tối đa<input value="10" disabled></label><div class="notice info">Điểm tối đa và điểm khởi đầu được cố định là 10, không thể thay đổi.</div><button class="btn btn-primary" type="submit">Lưu thông tin</button></form></div></div>
+        <div class="card"><div class="card-header"><div><h3 class="card-title">Thông tin website</h3><div class="card-subtitle">Cấu hình hiển thị cơ bản</div></div></div><div class="card-body"><form id="siteSettingsForm" class="stack-form" style="margin-top:0;"><label>Tên website<input name="siteName" value="${escapeHtml(s.siteName)}" required></label><label>Điểm khởi đầu<input value="${escapeHtml(s.maxScore ?? 10)}" disabled></label><label>Điểm tối đa<input value="${escapeHtml(s.maxScore ?? 10)}" disabled></label><div class="notice info">Bạn có thể chỉnh điểm tối thiểu/tối đa trong mục Quản lý tổ → Cấu hình điểm và nhật ký.</div><button class="btn btn-primary" type="submit">Lưu thông tin</button></form></div></div>
         <div class="card"><div class="card-header"><div><h3 class="card-title">Tài khoản Admin</h3><div class="card-subtitle">Thay đổi tài khoản và mật khẩu quản trị</div></div></div><div class="card-body"><form id="adminSettingsForm" class="stack-form" style="margin-top:0;"><label>Tài khoản Admin<input name="username" value="${escapeHtml(state.data.admin.username)}" required></label><label>Mật khẩu mới<input type="password" name="password" placeholder="Để trống để giữ nguyên"></label><label>Nhập lại mật khẩu<input type="password" name="password2" placeholder="Để trống nếu không đổi"></label><button class="btn btn-primary" type="submit">Lưu tài khoản</button></form></div></div>
         <div class="card"><div class="card-header"><div><h3 class="card-title">Sao lưu & khôi phục</h3><div class="card-subtitle">Dữ liệu được lưu trên Firebase</div></div></div><div class="card-body"><div class="toolbar"><button class="btn btn-secondary" data-action="backup">⬇️ Sao lưu JSON</button><label class="btn btn-secondary" style="display:inline-flex;cursor:pointer;">⬆️ Khôi phục JSON<input id="restoreFile" type="file" accept="application/json,.json" hidden></label></div><div class="notice warning" style="margin-top:14px;">Khôi phục sẽ thay thế toàn bộ dữ liệu hiện tại trong Firebase và các thiết bị đang dùng chung.</div></div></div>
         <div class="card"><div class="card-header"><div><h3 class="card-title">Thông tin dữ liệu</h3><div class="card-subtitle">Tổng quan cơ sở dữ liệu cục bộ</div></div></div><div class="card-body"><div class="kpi-row"><div class="kpi-mini"><span>Học sinh</span><strong>${state.data.students.length}</strong></div><div class="kpi-mini"><span>Giáo viên</span><strong>${state.data.teachers.length}</strong></div><div class="kpi-mini"><span>Lịch sử</span><strong>${state.data.history.length}</strong></div></div><div class="notice danger" style="margin-top:12px;">Nút xóa toàn bộ dữ liệu không được đặt trong giao diện để tránh mất dữ liệu ngoài ý muốn.</div></div></div>
@@ -780,7 +899,7 @@
     if (!student || !canAccessStudent(student)) return showToast('Bạn không có quyền xem học sinh này.', 'error');
     const logs = state.data.history.filter(h => h.studentId === student.id).sort((a,b)=>b.time-a.time).slice(0,20);
     openModal({title:'Chi tiết học sinh', wide:true, body:`
-      <div class="detail-head"><div><div class="detail-name">${escapeHtml(student.name)}</div><div class="detail-class">Lớp ${escapeHtml(student.className)}</div></div><div><div class="detail-score ${scoreClass(student.score)}">${clampScore(student.score)}<span class="muted" style="font-size:14px;"> / 10</span></div><div style="text-align:right;margin-top:8px;">${statusPill(student.score)}</div></div></div>
+      <div class="detail-head"><div><div class="detail-name">${escapeHtml(student.name)}</div><div class="detail-class">Lớp ${escapeHtml(student.className)}</div></div><div><div class="detail-score ${scoreClass(student.score)}">${clampScore(student.score)}<span class="muted" style="font-size:14px;"> / ${state.data.settings.maxScore ?? 10}</span></div><div style="text-align:right;margin-top:8px;">${statusPill(student.score)}</div></div></div>
       <div style="height:18px"></div>
       <div class="toolbar" style="margin-bottom:10px;"><div><h4 style="margin:0;font-size:14px;">Lịch sử gần đây</h4><div class="muted" style="font-size:12px;">Tối đa 20 bản ghi mới nhất</div></div><div class="actions">${canAccessStudent(student)?`<button class="btn btn-danger" data-action="record-violation" data-id="${escapeHtml(student.id)}">− Vi phạm</button><button class="btn btn-success" data-action="record-reward" data-id="${escapeHtml(student.id)}">+ Khen thưởng</button>`:''}</div></div>
       ${logs.length?`<div class="table-wrap"><table style="min-width:0"><thead><tr><th>Thời gian</th><th>Loại</th><th>Nội dung</th><th>Điểm</th><th>Trước → Sau</th><th>Người thực hiện</th><th>Ghi chú</th><th>Thao tác</th></tr></thead><tbody>${logs.map(h=>`<tr><td>${formatDate(h.time)}</td><td>${historyLabel(h)}</td><td>${escapeHtml(h.ruleName)}</td><td>${historyDeltaText(h)}</td><td>${isScoreHistory(h) ? `${h.oldScore} → <strong>${h.newScore}</strong>` : '—'}</td><td>${escapeHtml(h.teacherName)}</td><td>${escapeHtml(h.note||'—')}</td><td>${isScoreHistory(h) ? `<button class="btn btn-danger btn-sm" data-action="delete-history" data-id="${escapeHtml(h.id)}">🗑 Xóa</button>` : '<span class="muted">Đã lưu nhật ký</span>'}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><strong>Chưa có lịch sử</strong>Chưa phát sinh vi phạm, khen thưởng hoặc thao tác xóa.</div>`}
@@ -794,10 +913,10 @@
       <form id="studentForm" class="stack-form" style="margin-top:0;">
         <label>Họ và tên<input name="name" value="${escapeHtml(student?.name||'')}" required></label>
         <label>Lớp<input name="className" value="${escapeHtml(student?.className||'')}" required placeholder="Ví dụ: 12A2"></label>
-        <div class="notice info">Điểm ${student?'hiện tại được giữ nguyên':'khởi đầu'} cố định là 10/10.</div>
+        <div class="notice info">Điểm ${student?'hiện tại được giữ nguyên':'khởi đầu'} theo mức tối đa ${state.data.settings.maxScore ?? 10}.</div>
         <div class="modal-actions"><button class="btn btn-secondary" type="button" data-modal-close>Hủy</button><button class="btn btn-primary" type="submit">${student?'Lưu thay đổi':'Thêm học sinh'}</button></div>
       </form>`});
-    $('#studentForm').addEventListener('submit', e => { e.preventDefault(); const fd = new FormData(e.currentTarget); const name = String(fd.get('name')||'').trim(); const className = String(fd.get('className')||'').trim(); if (!name || !className) return showToast('Vui lòng nhập đầy đủ họ tên và lớp.', 'error'); const dup = state.data.students.find(s => s.name.toLocaleLowerCase('vi')===name.toLocaleLowerCase('vi') && s.className.toLocaleLowerCase('vi')===className.toLocaleLowerCase('vi') && s.id !== studentId); if (dup) return showToast('Học sinh cùng tên + lớp đã tồn tại.', 'error'); if (student) { student.name = name; student.className = className; student.score = clampScore(student.score); showToast('Đã cập nhật học sinh.'); } else { state.data.students.push({id:uid('stu'),name,className,score:FIXED_MAX_SCORE}); showToast('Đã thêm học sinh với 10/10 điểm.'); } saveData(); closeModal(); renderStudents(); });
+    $('#studentForm').addEventListener('submit', e => { e.preventDefault(); const fd = new FormData(e.currentTarget); const name = String(fd.get('name')||'').trim(); const className = String(fd.get('className')||'').trim(); if (!name || !className) return showToast('Vui lòng nhập đầy đủ họ tên và lớp.', 'error'); const dup = state.data.students.find(s => s.name.toLocaleLowerCase('vi')===name.toLocaleLowerCase('vi') && s.className.toLocaleLowerCase('vi')===className.toLocaleLowerCase('vi') && s.id !== studentId); if (dup) return showToast('Học sinh cùng tên + lớp đã tồn tại.', 'error'); if (student) { student.name = name; student.className = className; student.score = clampScore(student.score); showToast('Đã cập nhật học sinh.'); } else { state.data.students.push({id:uid('stu'),name,className,score:Number(state.data.settings.maxScore ?? FIXED_MAX_SCORE)}); showToast(`Đã thêm học sinh với ${state.data.settings.maxScore ?? FIXED_MAX_SCORE}/${state.data.settings.maxScore ?? FIXED_MAX_SCORE} điểm.`); } saveData(); closeModal(); renderStudents(); });
   }
 
   function showTeacherForm(teacherId = null) {
@@ -873,24 +992,40 @@
       <div class="detail-head" style="margin-bottom:16px;"><div><div class="detail-name" style="font-size:18px">${escapeHtml(student.name)}</div><div class="detail-class">Lớp ${escapeHtml(student.className)}</div></div><div><div class="detail-score ${scoreClass(student.score)}" style="font-size:30px">${clampScore(student.score)}<span class="muted" style="font-size:12px"> / 10</span></div></div></div>
       <form id="actionForm" class="stack-form" style="margin-top:0;">
         <label>${type==='reward'?'Nội dung khen thưởng':'Lỗi vi phạm'}<select name="ruleId">${rules.filter(r=>r.source==='global').length ? `<optgroup label="Quy định chung">${rules.filter(r=>r.source==='global').map(r=>`<option value="global:${escapeHtml(r.id)}">${escapeHtml(r.name)} — ${type==='reward'?'+':'−'}${r.points} điểm</option>`).join('')}</optgroup>` : ''}${rules.filter(r=>r.source==='teacher').length ? `<optgroup label="Quy định của bạn cho lớp ${escapeHtml(student.className)}">${rules.filter(r=>r.source==='teacher').map(r=>`<option value="teacher:${escapeHtml(r.id)}">${escapeHtml(r.name)} — ${type==='reward'?'+':'−'}${r.points} điểm</option>`).join('')}</optgroup>` : ''}</select></label>
+        <label>Tuần<select name="weekNumber">${Array.from({length:35}, (_,i) => i+1).map(w => `<option value="${w}" ${w===Math.min(35,Math.max(1,Number(state.dashboardWeek)||1))?'selected':''}>Tuần ${w}</option>`).join('')}</select></label>
         <label>Ghi chú<textarea name="note" placeholder="Ghi chú thêm (không bắt buộc)"></textarea></label>
         <div class="notice ${type==='reward'?'success':'warning'}">Điểm sẽ được cập nhật tự động và luôn nằm trong khoảng 0–10.</div>
         <div style="display:flex;justify-content:flex-end;gap:8px;"><button class="btn btn-secondary" type="button" data-modal-close>Hủy</button><button class="btn ${type==='reward'?'btn-success':'btn-danger'}" type="submit">${type==='reward'?'Cộng điểm':'Trừ điểm'}</button></div>
       </form>`});
-    $('#actionForm').addEventListener('submit', e => { e.preventDefault(); const fd = new FormData(e.currentTarget); const ref = String(fd.get('ruleId')||''); const [source, ruleId] = ref.split(':'); let rule = null; if (source === 'teacher') { rule = availableRulesForStudent(student, type).find(r=>r.source==='teacher' && r.id===ruleId && r.teacherId===currentTeacher()?.id && r.className===student.className); } else { rule = state.data.rules.find(r=>r.id===ruleId && r.type===type); } const note = String(fd.get('note')||'').trim(); if(!rule) return showToast('Quy định không tồn tại hoặc bạn không có quyền sử dụng.','error'); recordAction(student, rule, type, note); });
+    $('#actionForm').addEventListener('submit', e => { e.preventDefault(); const fd = new FormData(e.currentTarget); const ref = String(fd.get('ruleId')||''); const [source, ruleId] = ref.split(':'); let rule = null; if (source === 'teacher') { rule = availableRulesForStudent(student, type).find(r=>r.source==='teacher' && r.id===ruleId && r.teacherId===currentTeacher()?.id && r.className===student.className); } else { rule = state.data.rules.find(r=>r.id===ruleId && r.type===type); } const note = String(fd.get('note')||'').trim(); const weekNumber = Math.min(35, Math.max(1, Number(fd.get('weekNumber')) || Number(state.dashboardWeek) || 1)); if(!rule) return showToast('Quy định không tồn tại hoặc bạn không có quyền sử dụng.','error'); recordAction(student, rule, type, note, weekNumber); });
   }
 
-  function recordAction(student, rule, type, note='') {
+  function recordAction(student, rule, type, note='', weekNumber=1) {
     const oldScore = clampScore(student.score);
     const delta = type === 'reward' ? Number(rule.points) : -Number(rule.points);
-    const newScore = clampScore(oldScore + delta);
+    const newScore = Math.max(Number(state.data.settings.minScore || 0), Math.round((oldScore + delta) * 100) / 100);
     student.score = newScore;
     const teacher = isAdmin() ? {id:'admin',name:'Admin'} : currentTeacher();
-    state.data.history.push({id:uid('his'),studentId:student.id,studentName:student.name,className:student.className,teacherId:teacher?.id||'admin',teacherName:teacher?.name||'Admin',type,ruleName:rule.name,points:Math.max(0,Number(rule.points)||0),oldScore,newScore,note,time:Date.now()});
+    if (state.data.settings.logActivity !== false) state.data.history.push({id:uid('his'),studentId:student.id,studentName:student.name,className:student.className,teacherId:teacher?.id||'admin',teacherName:teacher?.name||'Admin',type,ruleName:rule.name,points:Math.max(0,Number(rule.points)||0),oldScore,newScore,note,weekNumber,time:Date.now()});
     saveData();
     closeModal();
     showToast(`${type==='reward'?'Đã ghi nhận khen thưởng':'Đã ghi nhận vi phạm'}: ${oldScore} → ${newScore}.`);
+    if (type === 'reward') celebrate('success');
     renderCurrentPage();
+  }
+
+  function showWeeklyViolations(week = Number(state.dashboardWeek) || 1, cls = state.dashboardClass) {
+    week = Math.min(35, Math.max(1, Number(week) || 1));
+    const rows = state.data.history.filter(h => {
+      if (h.type !== 'violation' || Number(h.weekNumber || 1) !== week) return false;
+      const stu = state.data.students.find(s => s.id === h.studentId);
+      return !!stu && canAccessStudent(stu) && (cls === 'all' || !cls || stu.className === cls);
+    }).sort((a,b) => b.time - a.time);
+    openModal({title:`Vi phạm cần xử lý — Tuần ${week}`, body:`
+      <div class="notice warning" style="margin-bottom:14px">Danh sách chỉ hiển thị các vi phạm của <strong>Tuần ${week}</strong>${cls && cls !== 'all' ? `, lớp <strong>${escapeHtml(cls)}</strong>` : ''}.</div>
+      ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>STT</th><th>Học sinh</th><th>Lớp</th><th>Vi phạm</th><th>Điểm trừ</th><th>Thời gian</th></tr></thead><tbody>${rows.map((h,i)=>`<tr><td>${i+1}</td><td><strong>${escapeHtml(h.studentName)}</strong></td><td>${escapeHtml(h.className)}</td><td>${escapeHtml(h.ruleName)}</td><td class="text-danger"><strong>−${Number(h.points)||0}</strong></td><td>${formatDate(h.time)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty"><strong>Không có vi phạm</strong>Tuần ${week} hiện chưa có học sinh nào bị ghi nhận vi phạm.</div>`}
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px"><button class="btn btn-secondary" type="button" data-modal-close>Đóng</button></div>
+    `});
   }
 
   function renderCurrentPage() {
@@ -1323,15 +1458,51 @@
     async text(name){ const bytes=await this.bytesOf(name); return bytes?new TextDecoder('utf-8').decode(bytes):null; }
   }
 
+  function showBulkStudentDeduct() {
+    const students = accessibleStudents();
+    const classes = effectiveClassOptions();
+    openModal({title:'Trừ điểm nhiều học sinh', body:`
+      <div class="notice warning" style="margin-bottom:14px">Chọn nhiều học sinh để áp dụng <strong>cùng một nội dung và số điểm trừ</strong>. Bản ghi được lưu theo tuần bạn chọn.</div>
+      <form id="bulkStudentModalForm" class="stack-form">
+        <div class="grid grid-2">
+          <label>Tuần<select name="weekNumber">${Array.from({length:35},(_,i)=>i+1).map(w=>`<option value="${w}" ${w===Number(state.dashboardWeek)||w===1?'selected':''}>Tuần ${w}</option>`).join('')}</select></label>
+          <label>Số điểm trừ<input name="points" type="number" min="0.1" max="10" step="0.1" value="1" required></label>
+        </div>
+        <label>Nội dung vi phạm<input name="ruleName" maxlength="150" placeholder="Ví dụ: Sử dụng điện thoại" required></label>
+        <label>Lớp lọc<select id="bulkStudentClass"><option value="all">Tất cả lớp</option>${classes.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}</select></label>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong>Chọn học sinh</strong><button class="btn btn-secondary btn-sm" type="button" id="bulkSelectAll">Chọn tất cả</button></div>
+        <div id="bulkStudentChoices" style="max-height:300px;overflow:auto;border:1px solid var(--border,#ddd);border-radius:12px;padding:10px">${students.map(st=>`<label class="bulk-student-choice" data-class="${escapeHtml(st.className)}" style="display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px"><input type="checkbox" name="studentIds" value="${escapeHtml(st.id)}"><span><strong>${escapeHtml(st.name)}</strong> <span class="muted">(${escapeHtml(st.className)})</span></span></label>`).join('')}</div>
+        <label>Ghi chú (không bắt buộc)<input name="note" maxlength="200" placeholder="Thông tin thêm"></label>
+        <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn btn-secondary" type="button" data-modal-close>Hủy</button><button class="btn btn-danger" type="submit">Trừ điểm đã chọn</button></div>
+      </form>`});
+    const form=$('#bulkStudentModalForm'); if(!form)return;
+    const cls=$('#bulkStudentClass');
+    cls?.addEventListener('change',()=>$$('.bulk-student-choice',form).forEach(row=>row.hidden=cls.value!=='all' && row.dataset.class!==cls.value));
+    $('#bulkSelectAll')?.addEventListener('click',()=>$$('.bulk-student-choice input[type="checkbox"]',form).filter(x=>!x.closest('label').hidden).forEach(x=>x.checked=true));
+    form.addEventListener('submit',e=>{
+      e.preventDefault(); const fd=new FormData(form); const ids=fd.getAll('studentIds').map(String); const points=Number(fd.get('points')); const ruleName=String(fd.get('ruleName')||'').trim(); const note=String(fd.get('note')||'').trim(); const weekNumber=Math.min(35,Math.max(1,Number(fd.get('weekNumber'))||1));
+      if(!ids.length)return showToast('Hãy chọn ít nhất một học sinh.','error');
+      if(!ruleName)return showToast('Nhập nội dung vi phạm.','error');
+      if(!Number.isFinite(points)||points<=0||points>10)return showToast('Số điểm trừ phải lớn hơn 0 và không quá 10.','error');
+      const selected=ids.map(id=>state.data.students.find(st=>st.id===id)).filter(Boolean);
+      if(!confirmAction(`Trừ ${points} điểm cho ${selected.length} học sinh trong Tuần ${weekNumber} với nội dung “${ruleName}”?`))return;
+      const teacher=isAdmin()?{id:'admin',name:'Admin'}:currentTeacher(); const now=Date.now();
+      selected.forEach(st=>{const old=Number(st.score)||0;const next=Math.max(Number(state.data.settings.minScore||0),Math.round((old-points)*100)/100);st.score=next;if(state.data.settings.logActivity!==false)state.data.history.push({id:uid('his'),studentId:st.id,studentName:st.name,className:st.className,teacherId:teacher?.id||'admin',teacherName:teacher?.name||'Admin',type:'violation',ruleName,points,oldScore:old,newScore:next,note,weekNumber,time:now});});
+      saveData(); closeModal(); renderStudents(); showToast(`Đã trừ ${points} điểm cho ${selected.length} học sinh.`);
+    });
+  }
+
   function setupEventDelegation() {
     document.addEventListener('click', e => {
       const actionEl = e.target.closest('[data-action]');
       if (!actionEl) return;
       const action = actionEl.dataset.action; const id = actionEl.dataset.id;
       try {
+        if (window.HanhKiemTeams && window.HanhKiemTeams.handleAction(actionEl)) return;
         if(action==='go-students') return navigate('students');
         if(action==='go-history') return navigate('history');
         if(action==='student-detail') return showStudentDetail(id);
+        if(action==='show-week-violations') return showWeeklyViolations(state.dashboardWeek, state.dashboardClass);
         if(action==='add-student') return showStudentForm();
         if(action==='import-students') return showImportModal();
         if(action==='download-template') return downloadSampleXlsx();
@@ -1340,6 +1511,7 @@
         if(action==='delete-student') return deleteStudent(id);
         if(action==='record-violation') return showActionForm(id,'violation');
         if(action==='record-reward') return showActionForm(id,'reward');
+        if(action==='bulk-student-deduct') return showBulkStudentDeduct();
         if(action==='add-teacher') return showTeacherForm();
         if(action==='edit-teacher') return showTeacherForm(id);
         if(action==='toggle-teacher'){ const t=state.data.teachers.find(x=>x.id===id); if(t){t.active=!t.active;saveData();renderTeachers();showToast(t.active?'Đã mở khóa tài khoản.':'Đã khóa tài khoản.');} return; }
@@ -1405,6 +1577,7 @@
   async function init(){
     try{
       state.data=normalizeData(await loadData());
+      state.data.students.forEach(s => { s.score = clampScore(s.score); });
       $('#loginSiteName').textContent=state.data.settings.siteName;
       setupEventDelegation();
       $('#appErrorReload').addEventListener('click',()=>window.location.reload());
@@ -1425,7 +1598,18 @@
     rowsToStudents,
     parseXlsxMinimal,
     buildXlsxWorkbook,
-    exportExcel
+    exportExcel,
+    saveData,
+    navigate,
+    isAdmin,
+    currentTeacher,
+    accessibleStudents,
+    uid,
+    clampScore,
+    showToast,
+    celebrate,
+    confirmAction,
+    getStorage
   };
 
   document.addEventListener('DOMContentLoaded', init);
