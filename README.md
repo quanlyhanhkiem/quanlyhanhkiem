@@ -1,4 +1,4 @@
-# Website Quản lý điểm hạnh kiểm — bản đã bổ sung quản lý tổ
+# Website Quản lý điểm hạnh kiểm, quản lý tổ — bản đã bổ sung quản lý tổ
 
 ## Chạy trên máy tính
 Yêu cầu Node.js 18 trở lên.
